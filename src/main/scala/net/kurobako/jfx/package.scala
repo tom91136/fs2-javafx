@@ -65,7 +65,7 @@ package object jfx {
 				}) { x => IO {prop.removeListener(x)} }
 				a <- q.dequeue
 			} yield a
-		}.onFinalize(IO {println(s"Kill prop $prop")})
+		}
 
 
 		def event[A <: Event](prop: ObjectProperty[EventHandler[A]], maxEvent: Int = 1)
@@ -79,7 +79,7 @@ package object jfx {
 				}) { x => IO {prop.set(x)} }
 				a <- q.dequeue
 			} yield a
-		}.onFinalize(IO {println(s"Kill event $prop")})
+		}
 
 
 		def cellFactory[N, C[x] <: Cell[x], A](prop: ObjectProperty[Callback[N, C[A]]])

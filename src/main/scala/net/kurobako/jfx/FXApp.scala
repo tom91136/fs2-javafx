@@ -33,7 +33,7 @@ trait FXApp extends IOApp {
 			.flatMap { case (ctx, stage) => streamFX(args, ctx, stage).compile.drain })
 			.onFinalize(IO(Platform.exit()))
 		_ <- Stream.eval(IO(println("Stream ended")))
-	} yield ()).compile.drain *> IO.pure(ExitCode.Success)
+	} yield ()).compile.drain.as(ExitCode.Success)
 }
 
 object FXApp {
