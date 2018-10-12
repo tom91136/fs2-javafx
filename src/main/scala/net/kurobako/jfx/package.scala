@@ -1,15 +1,18 @@
 package net.kurobako
 
 import cats.arrow.FunctionK
+import cats.effect.concurrent.{Deferred, Ref}
 import cats.effect.{Concurrent, ContextShift, IO}
 import cats.implicits._
 import cats.~>
-import fs2.Stream
 import fs2.concurrent.{Queue, SignallingRef}
+import fs2.{Pipe, Stream}
 import javafx.beans.property.ObjectProperty
 import javafx.beans.value.{ChangeListener, ObservableValue}
-import javafx.collections.ListChangeListener
+import javafx.collections._
 import javafx.event.{Event, EventHandler}
+import javafx.scene.control.Cell
+import javafx.util.Callback
 import net.kurobako.jfx.FXApp.FXContextShift
 
 package object jfx {
@@ -27,15 +30,14 @@ package object jfx {
 	private def unsafeRunAsync[A](f: IO[A])(implicit fxcs: FXContextShift): Unit =
 		f.start(fxcs.underlying).flatMap(_.join).runAsync(_ => IO.unit).unsafeRunSync()
 
+
 	object Event {
 
 
-		def indexed[A](prop: javafx.collections.ObservableList[A],
+		def indexed[A](prop: ObservableList[A],
 					   consInit: Boolean = true,
 					   maxEvent: Int = 1)
-					  (implicit fxcs: FXContextShift): Stream[IO, IndexedSeq[A]] = {
-			import fxcs._
-
+					  (implicit fxcs: FXContextShift, cs: ContextShift[IO]): Stream[IO, IndexedSeq[A]] = {
 			import scala.collection.JavaConverters._
 			for {
 				q <- Stream.eval(Queue.bounded[IO, IndexedSeq[A]](maxEvent))
@@ -52,8 +54,7 @@ package object jfx {
 		def property[A](prop: ObservableValue[A],
 						consInit: Boolean = true,
 						maxEvent: Int = 1)
-					   (implicit fxcs: FXContextShift): Stream[IO, Option[A]] = {
-			import fxcs._
+					   (implicit fxcs: FXContextShift, cs: ContextShift[IO]): Stream[IO, Option[A]] = {
 			for {
 				q <- Stream.eval(Queue.bounded[IO, Option[A]](maxEvent))
 				_ <- Stream.eval[IO, Unit] {if (consInit) q.enqueue1(Option(prop.getValue)) else IO.unit}
@@ -68,8 +69,7 @@ package object jfx {
 
 
 		def event[A <: Event](prop: ObjectProperty[EventHandler[A]], maxEvent: Int = 1)
-							 (implicit fxcs: FXContextShift): Stream[IO, A] = {
-			import fxcs._
+							 (implicit fxcs: FXContextShift, cs: ContextShift[IO]): Stream[IO, A] = {
 			for {
 				q <- Stream.eval(Queue.bounded[IO, A](maxEvent))
 				_ <- Stream.bracket(IO {
@@ -80,14 +80,56 @@ package object jfx {
 				a <- q.dequeue
 			} yield a
 		}.onFinalize(IO {println(s"Kill event $prop")})
+
+
+		def cellFactory[N, C[x] <: Cell[x], A](prop: ObjectProperty[Callback[N, C[A]]])
+											  (mkCell: N => C[A], 
+											   tickUnsafe: (Option[A], C[A]) => IO[Unit] = { (_: Option[A], _: C[A]) => IO.unit })
+											  (implicit fxcs: FXContextShift,  cs: ContextShift[IO]): Stream[IO, (Option[A], C[A])] = {
+//			implicit val cs: ContextShift[IO] = fxcs.underlying
+			for {
+				q <- Stream.eval(Queue.unbounded[IO, (Option[A], C[A])])
+				_ <- Stream.bracket(FXIO {
+					val prev = prop.get
+					prop.set { a =>
+						val cell = mkCell(a)
+						val listener: ChangeListener[A] = { (_, _, n) =>
+							val option = Option(n)
+							unsafeRunAsync(tickUnsafe(option, cell) *> q.enqueue1(option -> cell))
+						}
+						cell.itemProperty().addListener(listener)
+						cell
+					}
+					prev
+				}) { x => IO {prop.set(x)} }
+				a <- q.dequeue
+			} yield a
+		}
+
+
+		def switchMapKeyed[F[_], F2[x] >: F[x], O, O2, K](kf: O => K, f: O => Stream[F2, O2], maxOpen: Int = Int.MaxValue)
+														 (implicit F2: Concurrent[F2]): Pipe[F2, O, O2] = self =>
+			Stream.force(Ref.of[F2, Map[K, Deferred[F2, Unit]]](Map()).map { haltRef =>
+				self.evalMap { o =>
+					Deferred[F2, Unit].flatMap { halt =>
+						haltRef.modify { m =>
+							val k = kf(o)
+							val updated = m + (k -> halt)
+							m.get(k) match {
+								case None       => updated -> F2.unit
+								case Some(last) => updated -> last.complete(())
+							}
+						}.flatten.as(f(o).interruptWhen(halt.get.attempt))
+					}
+				}.parJoin(maxOpen)
+			})
+
 	}
 
 
 	class EventSink[A] private(private val as: SignallingRef[IO, A],
 							   private val refs: SignallingRef[IO, List[IO[Unit]]])
 							  (implicit val fxcs: FXContextShift) {
-
-		import fxcs._
 
 		val discrete: Stream[IO, A] = as.discrete
 

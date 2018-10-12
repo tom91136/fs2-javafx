@@ -10,10 +10,9 @@ import net.kurobako.jfx.FXApp.{FXAppHelper, FXContext, FXContextShift}
 
 import scala.concurrent.ExecutionContext
 
-abstract class FXApp extends IOApp {
+trait FXApp extends IOApp {
 
-
-	def fxContextShift: ContextShift[IO] = IO.contextShift(new ExecutionContext {
+	protected implicit def fxContextShift: FXContextShift = new FXContextShift(IO.contextShift(new ExecutionContext {
 		override def execute(runnable: Runnable): Unit = {
 			if (Platform.isFxApplicationThread) runnable.run()
 			else Platform.runLater(runnable)
@@ -21,19 +20,16 @@ abstract class FXApp extends IOApp {
 		override def reportFailure(t: Throwable): Unit = {
 			t.printStackTrace(System.err)
 		}
-	})
-
-	implicit val fxContextShiftInstance: FXContextShift = FXContextShift()(fxContextShift)
+	}))
 
 	def streamFX(args: List[String], ctx: FXContext, mainStage: Stage): Stream[IO, Unit]
-
 
 	override final def run(args: List[String]): IO[ExitCode] = (for {
 		halt <- Stream.eval(SignallingRef[IO, Boolean](false))
 		c <- Stream.eval(IO.async[(SignallingRef[IO, Boolean], FXContextShift) => (FXContext, Stage)] { cb => FXApp.ctx = cb }) concurrently
 			 Stream.eval(IO.async[Unit] { cb => FXApp.stopFn = cb } *> halt.set(true)) concurrently
 			 Stream.eval(IO(Application.launch(classOf[FXAppHelper], args: _*)))
-		_ <- Stream.eval(IO(c(halt, fxContextShiftInstance))
+		_ <- Stream.eval(IO(c(halt, fxContextShift))
 			.flatMap { case (ctx, stage) => streamFX(args, ctx, stage).compile.drain })
 			.onFinalize(IO(Platform.exit()))
 		_ <- Stream.eval(IO(println("Stream ended")))
@@ -42,8 +38,7 @@ abstract class FXApp extends IOApp {
 
 object FXApp {
 
-
-	case class FXContextShift(implicit val underlying: ContextShift[IO])
+	class FXContextShift(val underlying: ContextShift[IO]) extends AnyVal
 
 	case class FXContext(hostServices: HostServices, halt: Signal[IO, Boolean])
 						(implicit val fxcs: FXContextShift) {

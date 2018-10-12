@@ -1,3 +1,4 @@
+import sbt.Tests.{Group, SubProcess}
 
 lazy val `fs2-javafx` = project.in(file(".")).settings(
 	organization := "net.kurobako",
@@ -64,6 +65,8 @@ lazy val `fs2-javafx` = project.in(file(".")).settings(
 		//			"-Xlog-implicits",
 		"-P:bm4:no-map-id:y",
 	),
+	Test / fork := true,
+	Test / testForkedParallel := false,
 	javacOptions ++= Seq(
 		"-target", "1.8",
 		"-source", "1.8",
@@ -72,7 +75,8 @@ lazy val `fs2-javafx` = project.in(file(".")).settings(
 	addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.6"),
 
 	libraryDependencies ++= Seq(
-		"co.fs2" %% "fs2-core" % "1.0.0-RC2",
+		"co.fs2" %% "fs2-core" % "1.0.0",
 		"org.scalatest" %% "scalatest" % "3.0.1" % Test
 	)
+	
 )
