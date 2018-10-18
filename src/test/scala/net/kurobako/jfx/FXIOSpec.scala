@@ -80,8 +80,10 @@ class FXIOSpec extends FlatSpec with Matchers {
 							val b = new MenuItem("b")
 							cell.setContextMenu(new ContextMenu(a, b))
 							joinAndDrain(
-								event(a.onActionProperty).evalMap(e => IO(println(s"$x -> a $e"))),
-								event(b.onActionProperty).evalMap(e => IO(println(s"$x -> b $e"))))
+								eventProp(new VBox().onMouseClickedProperty()).evalMap(e => IO(println(s"$x -> a $e"))),
+
+								eventProp(a.onActionProperty).evalMap(e => IO(println(s"$x -> a $e"))),
+								eventProp(b.onActionProperty).evalMap(e => IO(println(s"$x -> b $e"))))
 						})
 					case (None, cell)    => Stream.eval_(FXIO {cell.setContextMenu(null)})
 				})).interruptWhen(ctx.halt)) concurrently Stream.sleep_(1 seconds) ++ Stream.eval(ctx.exit)

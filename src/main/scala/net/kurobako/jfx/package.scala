@@ -10,7 +10,8 @@ import fs2.{Pipe, Stream}
 import javafx.beans.property.ObjectProperty
 import javafx.beans.value.{ChangeListener, ObservableValue}
 import javafx.collections._
-import javafx.event.{Event, EventHandler}
+import javafx.event.{Event, EventHandler, EventType}
+import javafx.scene.Node
 import javafx.scene.control.Cell
 import javafx.util.Callback
 import net.kurobako.jfx.FXApp.FXContextShift
@@ -68,25 +69,45 @@ package object jfx {
 		}
 
 
-		def event[A <: Event](prop: ObjectProperty[EventHandler[A]], maxEvent: Int = 1)
+		def eventProp[A <: Event](prop: ObjectProperty[_ >: EventHandler[A]] , maxEvent: Int = 1)
+								 (implicit fxcs: FXContextShift, cs: ContextShift[IO]): Stream[IO, A] = {
+			for {
+				q <- Stream.eval(Queue.bounded[IO, A](maxEvent))
+				_ <- Stream.bracket(IO {
+					prop.set(new EventHandler[A] {
+						override def handle(event: A): Unit = unsafeRunAsync(q.enqueue1(event))
+					})
+				}) { _ => IO {prop.set(null)} }
+				a <- q.dequeue
+			} yield a
+		}
+
+		def event[A <: Event](prop: Node)
+							 (eventType: EventType[A], filter: Boolean = false, maxEvent: Int = 1)
 							 (implicit fxcs: FXContextShift, cs: ContextShift[IO]): Stream[IO, A] = {
 			for {
 				q <- Stream.eval(Queue.bounded[IO, A](maxEvent))
 				_ <- Stream.bracket(IO {
-					val prev = prop.get
-					prop.set({ e => unsafeRunAsync(q.enqueue1(e)) })
-					prev
-				}) { x => IO {prop.set(x)} }
+					val f: EventHandler[A] = { e => unsafeRunAsync(q.enqueue1(e)) }
+					if (filter) prop.addEventFilter[A](eventType, f)
+					else prop.addEventHandler[A](eventType, f)
+					f
+				}) { x =>
+					IO {
+						if (filter) prop.removeEventFilter(eventType, x)
+						else prop.removeEventHandler(eventType, x)
+					}
+				}
 				a <- q.dequeue
 			} yield a
 		}
 
 
 		def cellFactory[N, C[x] <: Cell[x], A](prop: ObjectProperty[Callback[N, C[A]]])
-											  (mkCell: N => C[A], 
+											  (mkCell: N => C[A],
 											   tickUnsafe: (Option[A], C[A]) => IO[Unit] = { (_: Option[A], _: C[A]) => IO.unit })
-											  (implicit fxcs: FXContextShift,  cs: ContextShift[IO]): Stream[IO, (Option[A], C[A])] = {
-//			implicit val cs: ContextShift[IO] = fxcs.underlying
+											  (implicit fxcs: FXContextShift, cs: ContextShift[IO]): Stream[IO, (Option[A], C[A])] = {
+			//			implicit val cs: ContextShift[IO] = fxcs.underlying
 			for {
 				q <- Stream.eval(Queue.unbounded[IO, (Option[A], C[A])])
 				_ <- Stream.bracket(FXIO {
