@@ -75,7 +75,7 @@ lazy val `fs2-javafx` = project.in(file(".")).settings(
 	addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.6"),
 
 	libraryDependencies ++= Seq(
-		"co.fs2" %% "fs2-core" % "1.0.0",
+		"co.fs2" %% "fs2-core" % "1.0.2",
 		"org.scalatest" %% "scalatest" % "3.0.1" % Test
 	)
 	
