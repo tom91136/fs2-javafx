@@ -4,6 +4,7 @@ package net.kurobako.jfx
 import cats.effect.IO
 import cats.implicits._
 import fs2.Stream
+import javafx.beans.property._
 import javafx.collections.FXCollections
 import javafx.scene.Scene
 import javafx.scene.control._
@@ -21,6 +22,23 @@ class FXIOSpec extends FlatSpec with Matchers {
 	behavior of "FXIOApp"
 	object IOContext {
 		def apply[A](io: IO[A]): A = io.unsafeRunSync()
+	}
+
+	ignore should "typecheck for primitives" in IOContext {
+
+		object MyApp extends FXApp {
+			override def streamFX(args: List[String], ctx: FXApp.FXContext, stage: Stage): Stream[IO, Unit] = {
+				lift(new SimpleStringProperty()): Stream[IO, Option[String]]
+				liftBool(new SimpleBooleanProperty()): Stream[IO, Option[Boolean]]
+				liftDouble(new SimpleDoubleProperty().asObject): Stream[IO, Option[Double]]
+				liftFloat(new SimpleFloatProperty().asObject): Stream[IO, Option[Float]]
+				liftLong(new SimpleLongProperty().asObject): Stream[IO, Option[Long]]
+				liftInt(new SimpleIntegerProperty().asObject): Stream[IO, Option[Int]]
+				Stream.eval(ctx.exit)
+			}
+		}
+
+		MyApp.run(Nil)
 	}
 
 	ignore should "start the app" in IOContext {
@@ -87,7 +105,7 @@ class FXIOSpec extends FlatSpec with Matchers {
 						})
 					case (None, cell)    => Stream.eval_(FXIO {cell.setContextMenu(null)})
 				})).interruptWhen(ctx.halt)) concurrently Stream.sleep_(1 seconds) ++ Stream.eval(ctx.exit)
- 
+
 
 		}
 

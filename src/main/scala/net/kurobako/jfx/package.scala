@@ -52,15 +52,16 @@ package object jfx {
 			} yield a
 		}
 
-		def property[A](prop: ObservableValue[A],
-						consInit: Boolean = true,
-						maxEvent: Int = 1)
-					   (implicit fxcs: FXContextShift, cs: ContextShift[IO]): Stream[IO, Option[A]] = {
+
+		private def lift0[B, A](prop: ObservableValue[B],
+								consInit: Boolean = true,
+								maxEvent: Int = 1)
+							   (implicit fxcs: FXContextShift, cs: ContextShift[IO], ev: B => A): Stream[IO, Option[A]] = {
 			for {
 				q <- Stream.eval(Queue.bounded[IO, Option[A]](maxEvent))
 				_ <- Stream.eval[IO, Unit] {if (consInit) q.enqueue1(Option(prop.getValue)) else IO.unit}
 				_ <- Stream.bracket(IO {
-					val listener: ChangeListener[A] = (_, _, n) => unsafeRunAsync(q.enqueue1(Option(n)))
+					val listener: ChangeListener[B] = (_, _, n) => unsafeRunAsync(q.enqueue1(Option(n)))
 					prop.addListener(listener)
 					listener
 				}) { x => IO {prop.removeListener(x)} }
@@ -68,8 +69,26 @@ package object jfx {
 			} yield a
 		}
 
+		def liftBool(prop: ObservableValue[java.lang.Boolean], consInit: Boolean = true, maxEvent: Int = 1)
+					(implicit fxcs: FXContextShift, cs: ContextShift[IO]): Stream[IO, Option[Boolean]] = lift0[java.lang.Boolean, Boolean](prop, consInit, maxEvent)
 
-		def eventProp[A <: Event](prop: ObjectProperty[_ >: EventHandler[A]] , maxEvent: Int = 1)
+		def liftInt(prop: ObservableValue[java.lang.Integer], consInit: Boolean = true, maxEvent: Int = 1)
+				   (implicit fxcs: FXContextShift, cs: ContextShift[IO]): Stream[IO, Option[Int]] = lift0[java.lang.Integer, Int](prop, consInit, maxEvent)
+
+		def liftLong(prop: ObservableValue[java.lang.Long], consInit: Boolean = true, maxEvent: Int = 1)
+					(implicit fxcs: FXContextShift, cs: ContextShift[IO]): Stream[IO, Option[Long]] = lift0[java.lang.Long, Long](prop, consInit, maxEvent)
+
+		def liftDouble(prop: ObservableValue[java.lang.Double], consInit: Boolean = true, maxEvent: Int = 1)
+					  (implicit fxcs: FXContextShift, cs: ContextShift[IO]): Stream[IO, Option[Double]] = lift0[java.lang.Double, Double](prop, consInit, maxEvent)
+
+		def liftFloat(prop: ObservableValue[java.lang.Float], consInit: Boolean = true, maxEvent: Int = 1)
+					 (implicit fxcs: FXContextShift, cs: ContextShift[IO]): Stream[IO, Option[Float]] = lift0[java.lang.Float, Float](prop, consInit, maxEvent)
+
+		def lift[A](prop: ObservableValue[A], consInit: Boolean = true, maxEvent: Int = 1)
+				   (implicit fxcs: FXContextShift, cs: ContextShift[IO]): Stream[IO, Option[A]] = lift0[A, A](prop, consInit, maxEvent)
+
+
+		def eventProp[A <: Event](prop: ObjectProperty[_ >: EventHandler[A]], maxEvent: Int = 1)
 								 (implicit fxcs: FXContextShift, cs: ContextShift[IO]): Stream[IO, A] = {
 			for {
 				q <- Stream.eval(Queue.bounded[IO, A](maxEvent))

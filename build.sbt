@@ -4,7 +4,7 @@ lazy val `fs2-javafx` = project.in(file(".")).settings(
 	organization := "net.kurobako",
 	name := "fs2-javafx",
 	version := "0.1.0-SNAPSHOT",
-	scalaVersion := "2.12.7",
+	scalaVersion := "2.12.8",
 	scalacOptions ++= Seq(
 		"-target:jvm-1.8",
 		"-encoding", "UTF-8",
