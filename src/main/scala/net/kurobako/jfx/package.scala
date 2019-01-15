@@ -38,13 +38,13 @@ package object jfx {
 		def indexed[A](prop: ObservableList[A],
 					   consInit: Boolean = true,
 					   maxEvent: Int = 1)
-					  (implicit fxcs: FXContextShift, cs: ContextShift[IO]): Stream[IO, IndexedSeq[A]] = {
+					  (implicit fxcs: FXContextShift, cs: ContextShift[IO]): Stream[IO, Vector[A]] = {
 			import scala.collection.JavaConverters._
 			for {
-				q <- Stream.eval(Queue.bounded[IO, IndexedSeq[A]](maxEvent))
+				q <- Stream.eval(Queue.bounded[IO, Vector[A]](maxEvent))
 				_ <- Stream.eval[IO, Unit] {if (consInit) q.enqueue1(prop.asScala.toVector) else IO.unit}
 				_ <- Stream.bracket(IO {
-					val listener: ListChangeListener[A] = { _ => unsafeRunAsync(q.enqueue1(prop.asScala.toIndexedSeq)) }
+					val listener: ListChangeListener[A] = { _ => unsafeRunAsync(q.enqueue1(prop.asScala.toVector)) }
 					prop.addListener(listener)
 					listener
 				}) { x => IO {prop.removeListener(x)} }
