@@ -22,7 +22,7 @@ trait FXApp extends IOApp {
 		}
 	}))
 
-	def streamFX(args: List[String], ctx: FXContext, mainStage: Stage): Stream[IO, Unit]
+	def runFX(args: List[String], ctx: FXContext, mainStage: Stage): Stream[IO, Unit]
 
 	override final def run(args: List[String]): IO[ExitCode] = (for {
 		halt <- Stream.eval(SignallingRef[IO, Boolean](false))
@@ -30,7 +30,7 @@ trait FXApp extends IOApp {
 			 Stream.eval(IO.async[Unit] { cb => FXApp.stopFn = cb } *> halt.set(true)) concurrently
 			 Stream.eval(IO(Application.launch(classOf[FXAppHelper], args: _*)))
 		_ <- Stream.eval(IO(c(halt, fxContextShift))
-			.flatMap { case (ctx, stage) => streamFX(args, ctx, stage).compile.drain })
+			.flatMap { case (ctx, stage) => runFX(args, ctx, stage).compile.drain })
 			.onFinalize(IO(Platform.exit()))
 		_ <- Stream.eval(IO(println("Stream ended")))
 	} yield ()).compile.drain.as(ExitCode.Success)
