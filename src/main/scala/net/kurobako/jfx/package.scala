@@ -10,7 +10,7 @@ import net.kurobako.jfx.FXApp.FXContextShift
 package object jfx {
 
 
-	val IoToStream: FunctionK[IO, Stream[IO, ?]] = λ[IO ~> Stream[IO, ?]](Stream.eval(_))
+	val IoToStream: FunctionK[IO, Stream[IO, *]] = λ[IO ~> Stream[IO, *]](Stream.eval(_))
 
 	@inline def FXIO[A](a: => A)(implicit fxcs: FXContextShift, cs: ContextShift[IO]): IO[A] =
 		IO.shift(fxcs.underlying) *> IO(a) <* IO.shift(cs)
@@ -19,8 +19,9 @@ package object jfx {
 	def joinAndDrain(xs: Stream[IO, Any]*)(implicit ev: Concurrent[IO]): Stream[IO, Nothing] =
 		Stream(xs: _*).parJoinUnbounded.drain
 
-	private[jfx] def unsafeRunAsync[A](f: IO[A])(implicit fxcs: FXContextShift): Unit =
-		f.start(fxcs.underlying).flatMap(_.join).runAsync(_ => IO.unit).unsafeRunSync()
+	private[jfx] def unsafeRunAsync[A](f: IO[A])(implicit fxcs: FXContextShift): Unit = {
+		f.runAsync(_ => IO.unit).unsafeRunSync()
+	}
 
 
 }

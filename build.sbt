@@ -1,5 +1,3 @@
-import sbt.Tests.{Group, SubProcess}
-
 lazy val `fs2-javafx` = project.in(file(".")).settings(
 	organization := "net.kurobako",
 	name := "fs2-javafx",
@@ -8,6 +6,7 @@ lazy val `fs2-javafx` = project.in(file(".")).settings(
 	scalacOptions ++= Seq(
 		"-P:bm4:no-map-id:y",
 	),
+	scalacOptions ~= filterConsoleScalacOptions,
 	Test / fork := true,
 	Test / testForkedParallel := false,
 	javacOptions ++= Seq(
