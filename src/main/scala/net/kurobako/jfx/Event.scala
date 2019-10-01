@@ -8,9 +8,9 @@ import fs2.{Pipe, Stream}
 import javafx.beans.property.ObjectProperty
 import javafx.beans.value.{ChangeListener, ObservableValue}
 import javafx.collections.{ListChangeListener, ObservableList}
-import javafx.event.{Event => FXEvent, EventHandler, EventType}
+import javafx.event.{EventHandler, EventType, Event => FXEvent}
 import javafx.scene.Node
-import javafx.scene.control.Cell
+import javafx.scene.control.{Cell, ListCell, ListView}
 import javafx.util.Callback
 import net.kurobako.jfx.FXApp.FXContextShift
 
@@ -110,30 +110,35 @@ object Event {
 	}
 
 
-	def cellFactory[N, C[x] <: Cell[x], A](prop: ObjectProperty[Callback[N, C[A]]])
-										  (mkCell: N => C[A],
+	def cellFactory[P, C[x] <: Cell[x], A](prop: ObjectProperty[Callback[P, C[A]]])
+										  (mkCell: (P, (Option[A], C[A]) => Unit) => C[A],
 										   tickUnsafe: (Option[A], C[A]) => IO[Unit] = { (_: Option[A], _: C[A]) => IO.unit })
 										  (implicit fxcs: FXContextShift, cs: ContextShift[IO]): Stream[IO, (Option[A], C[A])] = {
-		//			implicit val cs: ContextShift[IO] = fxcs.underlying
 		for {
 			q <- Stream.eval(Queue.unbounded[IO, (Option[A], C[A])])
 			_ <- Stream.bracket(FXIO {
 				val prev = prop.get
 				prop.set { a =>
-					val cell                        = mkCell(a)
-					val listener: ChangeListener[A] = { (_, _, n) =>
-						val option = Option(n)
-						unsafeRunAsync(tickUnsafe(option, cell) *> q.enqueue1(option -> cell))
-					}
-					cell.itemProperty().addListener(listener)
-					cell
+					mkCell(a, { (a, c) => unsafeRunAsync(tickUnsafe(a, c) *> q.enqueue1(a -> c)) })
 				}
 				prev
-			}) { x => IO {prop.set(x)} }
+			}) { prev => IO {prop.set(prev)} }
 			a <- q.dequeue
 		} yield a
 	}
 
+	def simpleListCellFactory[A](prop: ObjectProperty[Callback[ListView[A], ListCell[A]]])
+								(tickUnsafe: (Option[A], ListCell[A]) => IO[Unit] = { (_: Option[A], _: ListCell[A]) => IO.unit })
+								(implicit fxcs: FXContextShift, cs: ContextShift[IO]): Stream[IO, (Option[A], ListCell[A])] = {
+		cellFactory(prop)((_, cb) => {
+			new ListCell[A] {
+				override def updateItem(item: A, empty: Boolean): Unit = {
+					super.updateItem(item, empty)
+					cb(if (empty || item == null) None else Some(item), this)
+				}
+			}
+		}, tickUnsafe)
+	}
 
 	def switchMapKeyed[F[_], F2[x] >: F[x], O, O2, K](kf: O => K, f: O => Stream[F2, O2], maxOpen: Int = Int.MaxValue)
 													 (implicit F2: Concurrent[F2]): Pipe[F2, O, O2] = self =>

@@ -12,9 +12,20 @@ import scala.concurrent.ExecutionContext
 
 trait FXApp extends IOApp {
 
+
+	private def time[R](name: String)(block: => R): R = {
+		val t0     = System.nanoTime()
+		val result = block
+		val t1     = System.nanoTime()
+		println(s"$name =>  ${ ((t1 - t0).toFloat / 1000000)}ms")
+		result
+	}
+
 	protected implicit def fxContextShift: FXContextShift = new FXContextShift(IO.contextShift(new ExecutionContext {
 		override def execute(runnable: Runnable): Unit = {
-			if (Platform.isFxApplicationThread) runnable.run()
+			if (Platform.isFxApplicationThread) {
+				runnable.run()
+			}
 			else Platform.runLater(runnable)
 		}
 		override def reportFailure(t: Throwable): Unit = {

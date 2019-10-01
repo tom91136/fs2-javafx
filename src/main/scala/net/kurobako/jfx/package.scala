@@ -21,6 +21,7 @@ package object jfx {
 
 	private[jfx] def unsafeRunAsync[A](f: IO[A])(implicit fxcs: FXContextShift): Unit = {
 		f.runAsync(_ => IO.unit).unsafeRunSync()
+		//		f.start(fxcs.underlying).flatMap(_.join).runAsync(_ => IO.unit).unsafeRunSync()
 	}
 
 
