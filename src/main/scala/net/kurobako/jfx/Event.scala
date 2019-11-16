@@ -76,29 +76,29 @@ object Event {
 		}) { _ => IO {prop.set(null)} } >> Stream.never[IO]
 
 
-	def handleEventF[A <: FXEvent, B](prop: ObjectProperty[_ >: EventHandler[A]])(f: A => B)
+	def handleEventF[A <: FXEvent, B](prop: ObjectProperty[_ >: EventHandler[A]])(f: A => Option[B])
 									 (implicit fxcs: FXContextShift, cs: ContextShift[IO]): Stream[IO, B] = {
 		for {
 			q <- Stream.eval(Queue.bounded[IO, B](maxSize = 1))
 			_ <- Stream.bracket(IO {
 				prop.set(new EventHandler[A] {
-					override def handle(event: A): Unit = unsafeRunAsync(q.enqueue1(f(event)))
+					override def handle(event: A): Unit = f(event).foreach(x => unsafeRunAsync(q.enqueue1(x)))
 				})
 			}) { _ => IO {prop.set(null)} }
 			a <- q.dequeue
 		} yield a
 	}
 
-	def handleEventF[A <: FXEvent](prop: Node)
-								  (eventType: EventType[A], filter: Boolean = false)
-								  (implicit fxcs: FXContextShift, cs: ContextShift[IO]): Stream[IO, A] = {
+	def handleEventF[A <: FXEvent, B](prop: Node)
+									 (eventType: EventType[A], filter: Boolean = false)(f: A => Option[B])
+									 (implicit fxcs: FXContextShift, cs: ContextShift[IO]): Stream[IO, B] = {
 		for {
-			q <- Stream.eval(Queue.bounded[IO, A](maxSize = 1))
+			q <- Stream.eval(Queue.bounded[IO, B](maxSize = 1))
 			_ <- Stream.bracket(IO {
-				val f: EventHandler[A] = { e => unsafeRunAsync(q.enqueue1(e)) }
-				if (filter) prop.addEventFilter[A](eventType, f)
-				else prop.addEventHandler[A](eventType, f)
-				f
+				val handler: EventHandler[A] = { e => f(e).foreach(x => unsafeRunAsync(q.enqueue1(x))) }
+				if (filter) prop.addEventFilter[A](eventType, handler)
+				else prop.addEventHandler[A](eventType, handler)
+				handler
 			}) { x =>
 				IO {
 					if (filter) prop.removeEventFilter(eventType, x)
