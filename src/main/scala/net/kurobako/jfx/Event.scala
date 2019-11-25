@@ -109,6 +109,35 @@ object Event {
 		} yield a
 	}
 
+	def nodeCellFactory[A, N](prop: ObjectProperty[Callback[ListView[A], ListCell[A]]])
+							 (mkNode: () => N)( toNode : N => Node)
+							 (unsafeUpdate: (Option[A], N) => IO[Unit])
+							 (implicit
+							  fxcs: FXContextShift,
+							  cs: ContextShift[IO]): Stream[IO, (Option[A], N)] = for {
+		q <- Stream.eval(Queue.unbounded[IO, (Option[A], N)])
+		_ <- Stream.bracket(FXIO {
+			val prev = prop.get
+			prop.set { _ =>
+				new ListCell[A] {
+					val node = mkNode()
+					setText(null)
+					override def updateItem(item: A, empty: Boolean): Unit = {
+						super.updateItem(item, empty)
+						if (item == null)
+							setGraphic(null)
+						else setGraphic(toNode(node))
+
+						val a = if (empty) None else Option(item)
+						unsafeRunAsync(unsafeUpdate(a, node) *> q.enqueue1(a -> node))
+					}
+				}
+			}
+			prev
+		}) { prev => IO {prop.set(prev)} }
+		a <- q.dequeue
+	} yield a
+
 
 	def cellFactory[P, C[x] <: Cell[x], A](prop: ObjectProperty[Callback[P, C[A]]])
 										  (mkCell: (P, (Option[A], C[A]) => Unit) => C[A],
