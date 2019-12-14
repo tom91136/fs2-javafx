@@ -26,12 +26,17 @@ class FXIOSpec extends FlatSpec with Matchers {
 
 	object MyApp1 extends FXApp {
 		override def runFX(args: List[String], ctx: FXApp.FXContext, stage: Stage): Stream[IO, Unit] = {
-			lift(new SimpleStringProperty()): Stream[IO, Option[String]]
-			liftBool(new SimpleBooleanProperty()): Stream[IO, Option[Boolean]]
-			liftDouble(new SimpleDoubleProperty().asObject): Stream[IO, Option[Double]]
-			liftFloat(new SimpleFloatProperty().asObject): Stream[IO, Option[Float]]
-			liftLong(new SimpleLongProperty().asObject): Stream[IO, Option[Long]]
-			liftInt(new SimpleIntegerProperty().asObject): Stream[IO, Option[Int]]
+			lift(new SimpleStringProperty(), consInit = true): Stream[IO, Option[String]]
+			lift(new SimpleBooleanProperty(), consInit = true): Stream[IO, Option[Boolean]]
+			lift(new SimpleDoubleProperty(), consInit = true): Stream[IO, Option[Double]]
+			lift(new SimpleFloatProperty(), consInit = true): Stream[IO, Option[Float]]
+			lift(new SimpleLongProperty(), consInit = true): Stream[IO, Option[Long]]
+			lift(new SimpleIntegerProperty(), consInit = true): Stream[IO, Option[Int]]
+			lift(new SimpleBooleanProperty().asObject(), consInit = true): Stream[IO, Option[Boolean]]
+			lift(new SimpleDoubleProperty().asObject(), consInit = true): Stream[IO, Option[Double]]
+			lift(new SimpleFloatProperty().asObject(), consInit = true): Stream[IO, Option[Float]]
+			lift(new SimpleLongProperty().asObject(), consInit = true): Stream[IO, Option[Long]]
+			liftX(new SimpleIntegerProperty().asObject(), consInit = true): Stream[IO, Option[Int]]
 			Stream.eval(ctx.exit)
 		}
 	}
@@ -58,45 +63,45 @@ class FXIOSpec extends FlatSpec with Matchers {
 	}
 	ignore should "start the app" in IOContext(MyApp2.run(Nil))
 
-	object MyApp3 extends FXApp {
-
-
-		override def runFX(args: List[String], ctx: FXApp.FXContext, stage: Stage): Stream[IO, Unit] =
-			Stream.force(for {
-				ls <- FXIO {
-					val ls = new ListView[Long](FXCollections.observableArrayList(0L to 100L: _*))
-					VBox.setVgrow(ls, Priority.ALWAYS)
-					stage.setScene(new Scene(new VBox(ls)))
-					stage.show()
-					ls.scrollTo(50)
-					ls
-				}
-			} yield cellFactory(ls.cellFactoryProperty())(_ => new ListCell[Long], {
-				case (Some(x), cell) =>
-					FXIO {
-						cell.setText(x.toString)
-						val color = if (x > 50) Color.GREEN else Color.WHITE
-						cell.setBackground(new Background(new BackgroundFill(color, null, null)))
-					}
-				case (None, cell)    => FXIO {cell.setText("")}
-			}).through(switchMapKeyed(x => x._2, {
-				case (Some(x), cell) => Stream.force(
-					FXIO {
-						val a = new MenuItem("a")
-						val b = new MenuItem("b")
-						cell.setContextMenu(new ContextMenu(a, b))
-						joinAndDrain(
-							handleEvent(new VBox().onMouseClickedProperty())().evalMap(e => IO(println(s"$x -> a $e"))),
-
-							handleEvent(a.onActionProperty)().evalMap(e => IO(println(s"$x -> a $e"))),
-							handleEvent(b.onActionProperty)().evalMap(e => IO(println(s"$x -> b $e"))))
-					})
-				case (None, cell)    => Stream.eval_(FXIO {cell.setContextMenu(null)})
-			})).interruptWhen(ctx.halt)) concurrently Stream.sleep_(1 seconds) ++ Stream.eval(ctx.exit)
-
-
-	}
-
-	it should "flow" in IOContext(MyApp3.run(Nil))
+	//	object MyApp3 extends FXApp {
+	//
+	//
+	//		override def runFX(args: List[String], ctx: FXApp.FXContext, stage: Stage): Stream[IO, Unit] =
+	//			Stream.force(for {
+	//				ls <- FXIO {
+	//					val ls = new ListView[Long](FXCollections.observableArrayList(0L to 100L: _*))
+	//					VBox.setVgrow(ls, Priority.ALWAYS)
+	//					stage.setScene(new Scene(new VBox(ls)))
+	//					stage.show()
+	//					ls.scrollTo(50)
+	//					ls
+	//				}
+	//			} yield cellFactory(ls.cellFactoryProperty())(_ => new ListCell[Long], {
+	//				case (Some(x), cell) =>
+	//					FXIO {
+	//						cell.setText(x.toString)
+	//						val color = if (x > 50) Color.GREEN else Color.WHITE
+	//						cell.setBackground(new Background(new BackgroundFill(color, null, null)))
+	//					}
+	//				case (None, cell)    => FXIO {cell.setText("")}
+	//			}).through(switchMapKeyed(x => x._2, {
+	//				case (Some(x), cell) => Stream.force(
+	//					FXIO {
+	//						val a = new MenuItem("a")
+	//						val b = new MenuItem("b")
+	//						cell.setContextMenu(new ContextMenu(a, b))
+	//						joinAndDrain(
+	//							handleEvent(new VBox().onMouseClickedProperty())().evalMap(e => IO(println(s"$x -> a $e"))),
+	//
+	//							handleEvent(a.onActionProperty)().evalMap(e => IO(println(s"$x -> a $e"))),
+	//							handleEvent(b.onActionProperty)().evalMap(e => IO(println(s"$x -> b $e"))))
+	//					})
+	//				case (None, cell)    => Stream.eval_(FXIO {cell.setContextMenu(null)})
+	//			})).interruptWhen(ctx.halt)) concurrently Stream.sleep_(1 seconds) ++ Stream.eval(ctx.exit)
+	//
+	//
+	//	}
+	//
+	//	it should "flow" in IOContext(MyApp3.run(Nil))
 
 }

@@ -6,7 +6,7 @@ import cats.implicits._
 import fs2.concurrent.Queue
 import fs2.{Pipe, Stream}
 import javafx.beans.property.ObjectProperty
-import javafx.beans.value.{ChangeListener, ObservableValue}
+import javafx.beans.value.{ChangeListener, ObservableBooleanValue, ObservableDoubleValue, ObservableFloatValue, ObservableIntegerValue, ObservableLongValue, ObservableValue}
 import javafx.collections.{ListChangeListener, ObservableList}
 import javafx.event.{EventHandler, EventType, Event => FXEvent}
 import javafx.scene.Node
@@ -35,10 +35,10 @@ object Event {
 	}
 
 
-	private def lift0[B, A](prop: ObservableValue[B], consInit: Boolean, maxEvent: Int)
-						   (implicit fxcs: FXContextShift, cs: ContextShift[IO], ev: B => A): Stream[IO, Option[A]] = {
+	@inline private def lift0[B, A](prop: ObservableValue[B], consInit: Boolean)
+								   (implicit fxcs: FXContextShift, cs: ContextShift[IO], ev: B => A): Stream[IO, Option[A]] = {
 		for {
-			q <- Stream.eval(Queue.bounded[IO, Option[A]](maxEvent))
+			q <- Stream.eval(Queue.bounded[IO, Option[A]](1))
 			_ <- Stream.eval[IO, Unit] {if (consInit) q.enqueue1(Option(ev(prop.getValue))) else IO.unit}
 			_ <- Stream.bracket(IO {
 				val listener: ChangeListener[B] = (_, _, n) => unsafeRunAsync(q.enqueue1(Option(ev(n))))
@@ -49,23 +49,38 @@ object Event {
 		} yield a
 	}
 
-	def liftBool(prop: ObservableValue[java.lang.Boolean], consInit: Boolean = true, maxEvent: Int = 1)
-				(implicit fxcs: FXContextShift, cs: ContextShift[IO]): Stream[IO, Option[Boolean]] = lift0[java.lang.Boolean, Boolean](prop, consInit, maxEvent)
+	@inline private def lift1[O <: ObservableValue[P], P, B, A](prop: O, getter: O => B, consInit: Boolean)
+															   (implicit fxcs: FXContextShift, cs: ContextShift[IO], ev: B => A): Stream[IO, Option[A]] = {
+		for {
+			q <- Stream.eval(Queue.bounded[IO, Option[A]](1))
+			_ <- Stream.eval[IO, Unit] {if (consInit) q.enqueue1(Option(ev(getter(prop)))) else IO.unit}
+			_ <- Stream.bracket(IO {
+				val listener: ChangeListener[P] = (_, _, _) => unsafeRunAsync(q.enqueue1(Option(ev(getter(prop)))))
+				prop.addListener(listener)
+				listener
+			}) { x => IO {prop.removeListener(x)} }
+			a <- q.dequeue
+		} yield a
+	}
 
-	def liftInt(prop: ObservableValue[java.lang.Integer], consInit: Boolean = true, maxEvent: Int = 1)
-			   (implicit fxcs: FXContextShift, cs: ContextShift[IO]): Stream[IO, Option[Int]] = lift0[java.lang.Integer, Int](prop, consInit, maxEvent)
+	def lift[A](prop: ObservableValue[A], consInit: Boolean)
+			   (implicit fxcs: FXContextShift, cs: ContextShift[IO]): Stream[IO, Option[A]] = lift0[A, A](prop, consInit)
 
-	def liftLong(prop: ObservableValue[java.lang.Long], consInit: Boolean = true, maxEvent: Int = 1)
-				(implicit fxcs: FXContextShift, cs: ContextShift[IO]): Stream[IO, Option[Long]] = lift0[java.lang.Long, Long](prop, consInit, maxEvent)
+	def lift(prop: ObservableBooleanValue, consInit: Boolean)
+			(implicit fxcs: FXContextShift, cs: ContextShift[IO]): Stream[IO, Option[Boolean]] = lift1[ObservableBooleanValue, java.lang.Boolean, java.lang.Boolean, Boolean](prop, _.get, consInit)
 
-	def liftDouble(prop: ObservableValue[java.lang.Double], consInit: Boolean = true, maxEvent: Int = 1)
-				  (implicit fxcs: FXContextShift, cs: ContextShift[IO]): Stream[IO, Option[Double]] = lift0[java.lang.Double, Double](prop, consInit, maxEvent)
+	def lift(prop: ObservableDoubleValue, consInit: Boolean)
+			(implicit fxcs: FXContextShift, cs: ContextShift[IO]): Stream[IO, Option[Double]] = lift1[ObservableDoubleValue, Number, java.lang.Double, Double](prop, _.get, consInit)
 
-	def liftFloat(prop: ObservableValue[java.lang.Float], consInit: Boolean = true, maxEvent: Int = 1)
-				 (implicit fxcs: FXContextShift, cs: ContextShift[IO]): Stream[IO, Option[Float]] = lift0[java.lang.Float, Float](prop, consInit, maxEvent)
+	def lift(prop: ObservableFloatValue, consInit: Boolean)
+			(implicit fxcs: FXContextShift, cs: ContextShift[IO]): Stream[IO, Option[Float]] = lift1[ObservableFloatValue, Number, java.lang.Float, Float](prop, _.get, consInit)
 
-	def lift[A](prop: ObservableValue[A], consInit: Boolean = true, maxEvent: Int = 1)
-			   (implicit fxcs: FXContextShift, cs: ContextShift[IO]): Stream[IO, Option[A]] = lift0[A, A](prop, consInit, maxEvent)
+	def lift(prop: ObservableIntegerValue, consInit: Boolean)
+			(implicit fxcs: FXContextShift, cs: ContextShift[IO]): Stream[IO, Option[Int]] = lift1[ObservableIntegerValue, Number, java.lang.Integer, Int](prop, _.get, consInit)
+
+	def lift(prop: ObservableLongValue, consInit: Boolean)
+			(implicit fxcs: FXContextShift, cs: ContextShift[IO]): Stream[IO, Option[Long]] = lift1[ObservableLongValue, Number, java.lang.Long, Long](prop, _.get, consInit)
+
 
 
 	def handleEvent[A <: FXEvent](prop: ObjectProperty[_ >: EventHandler[A]])(f: A => Unit = (e: A) => e.consume()): Stream[IO, Unit] =
@@ -110,7 +125,7 @@ object Event {
 	}
 
 	def nodeCellFactory[A, N](prop: ObjectProperty[Callback[ListView[A], ListCell[A]]])
-							 (mkNode: () => N)( toNode : N => Node)
+							 (mkNode: () => N)(toNode: N => Node)
 							 (unsafeUpdate: (Option[A], N) => IO[Unit])
 							 (implicit
 							  fxcs: FXContextShift,
@@ -121,14 +136,11 @@ object Event {
 			prop.set { _ =>
 				new ListCell[A] {
 					val node = mkNode()
+					setGraphic(toNode(node))
 					setText(null)
 					override def updateItem(item: A, empty: Boolean): Unit = {
 						super.updateItem(item, empty)
-						if (item == null)
-							setGraphic(null)
-						else setGraphic(toNode(node))
-
-						val a = if (empty) None else Option(item)
+						val a = if (empty || item == null) None else Some(item)
 						unsafeRunAsync(unsafeUpdate(a, node) *> q.enqueue1(a -> node))
 					}
 				}
