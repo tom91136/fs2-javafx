@@ -63,8 +63,8 @@ object Event {
 		} yield a
 	}
 
-	def lift[A](prop: ObservableValue[A], consInit: Boolean)
-			   (implicit fxcs: FXContextShift, cs: ContextShift[IO]): Stream[IO, Option[A]] = lift0[A, A](prop, consInit)
+	def lift[A <: AnyRef](prop: ObservableValue[A], consInit: Boolean)
+						 (implicit fxcs: FXContextShift, cs: ContextShift[IO]): Stream[IO, Option[A]] = lift0[A, A](prop, consInit)
 
 	def lift(prop: ObservableBooleanValue, consInit: Boolean)
 			(implicit fxcs: FXContextShift, cs: ContextShift[IO]): Stream[IO, Option[Boolean]] = lift1[ObservableBooleanValue, java.lang.Boolean, java.lang.Boolean, Boolean](prop, _.get, consInit)
@@ -80,7 +80,6 @@ object Event {
 
 	def lift(prop: ObservableLongValue, consInit: Boolean)
 			(implicit fxcs: FXContextShift, cs: ContextShift[IO]): Stream[IO, Option[Long]] = lift1[ObservableLongValue, Number, java.lang.Long, Long](prop, _.get, consInit)
-
 
 
 	def handleEvent[A <: FXEvent](prop: ObjectProperty[_ >: EventHandler[A]])(f: A => Unit = (e: A) => e.consume()): Stream[IO, Unit] =

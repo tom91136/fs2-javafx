@@ -32,11 +32,11 @@ class FXIOSpec extends FlatSpec with Matchers {
 			lift(new SimpleFloatProperty(), consInit = true): Stream[IO, Option[Float]]
 			lift(new SimpleLongProperty(), consInit = true): Stream[IO, Option[Long]]
 			lift(new SimpleIntegerProperty(), consInit = true): Stream[IO, Option[Int]]
-			lift(new SimpleBooleanProperty().asObject(), consInit = true): Stream[IO, Option[Boolean]]
-			lift(new SimpleDoubleProperty().asObject(), consInit = true): Stream[IO, Option[Double]]
-			lift(new SimpleFloatProperty().asObject(), consInit = true): Stream[IO, Option[Float]]
-			lift(new SimpleLongProperty().asObject(), consInit = true): Stream[IO, Option[Long]]
-			liftX(new SimpleIntegerProperty().asObject(), consInit = true): Stream[IO, Option[Int]]
+//			lift(new SimpleBooleanProperty().asObject(), consInit = true): Stream[IO, Option[Boolean]]
+//			lift(new SimpleDoubleProperty().asObject(), consInit = true): Stream[IO, Option[Double]]
+//			lift(new SimpleFloatProperty().asObject(), consInit = true): Stream[IO, Option[Float]]
+//			lift(new SimpleLongProperty().asObject(), consInit = true): Stream[IO, Option[Long]]
+//			liftX(new SimpleIntegerProperty().asObject(), consInit = true): Stream[IO, Option[Int]]
 			Stream.eval(ctx.exit)
 		}
 	}
