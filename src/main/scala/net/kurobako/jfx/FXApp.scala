@@ -1,6 +1,6 @@
 package net.kurobako.jfx
 
-import cats.effect.{ContextShift, ExitCode, IO, IOApp}
+import cats.effect.{Blocker, ContextShift, ExitCode, IO, IOApp}
 import cats.implicits._
 import fs2.Stream
 import fs2.concurrent.{Signal, SignallingRef}
@@ -17,7 +17,7 @@ trait FXApp extends IOApp {
 		val t0     = System.nanoTime()
 		val result = block
 		val t1     = System.nanoTime()
-		println(s"$name =>  ${ ((t1 - t0).toFloat / 1000000)}ms")
+		println(s"$name =>  ${((t1 - t0).toFloat / 1000000)}ms")
 		result
 	}
 
@@ -33,13 +33,15 @@ trait FXApp extends IOApp {
 		}
 	}))
 
+	protected def fxBlocker: Blocker
+
 	def runFX(args: List[String], ctx: FXContext, mainStage: Stage): Stream[IO, Unit]
 
 	override final def run(args: List[String]): IO[ExitCode] = (for {
 		halt <- Stream.eval(SignallingRef[IO, Boolean](false))
 		c <- Stream.eval(IO.async[(SignallingRef[IO, Boolean], FXContextShift) => (FXContext, Stage)] { cb => FXApp.ctx = cb }) concurrently
 			 Stream.eval(IO.async[Unit] { cb => FXApp.stopFn = cb } *> halt.set(true)) concurrently
-			 Stream.eval(IO(Application.launch(classOf[FXAppHelper], args: _*)))
+			 Stream.eval(fxBlocker.blockOn(IO(Application.launch(classOf[FXAppHelper], args: _*))))
 		_ <- Stream.eval(IO(c(halt, fxContextShift))
 			.flatMap { case (ctx, stage) => runFX(args, ctx, stage).compile.drain })
 			.onFinalize(IO(Platform.exit()))
@@ -67,11 +69,11 @@ object FXApp {
 	private class FXAppHelper extends Application {
 
 		override def start(primaryStage: Stage): Unit = {
-			println("FX start")
+			println(s"FX start, ctx=${FXApp.ctx}")
 			FXApp.ctx(Right(FXContext(getHostServices, _)(_) -> primaryStage))
 		}
 		override def stop(): Unit = {
-			println("FX stop")
+			println(s"FX stop, stopFn=${stopFn}")
 			stopFn(Right(()))
 		}
 	}
