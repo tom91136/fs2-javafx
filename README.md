@@ -1,8 +1,7 @@
 # fs2-javafx
 
 
-<!-- TODO -->
-<!-- [![Build Status](https://travis-ci.org/tom91136/fs2-javafx.svg?branch=master)](https://travis-ci.org/tom91136/fs2-javafx) -->
+[![Build Status](https://travis-ci.org/tom91136/fs2-javafx.svg?branch=master)](https://travis-ci.org/tom91136/fs2-javafx)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Download](https://api.bintray.com/packages/tom91136/maven/fs2-javafx/images/download.svg)](https://bintray.com/tom91136/maven/fs2-javafx/_latestVersion)
 
