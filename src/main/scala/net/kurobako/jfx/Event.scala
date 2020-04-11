@@ -6,27 +6,31 @@ import cats.implicits._
 import fs2.concurrent.Queue
 import fs2.{Pipe, Stream}
 import javafx.beans.property.ObjectProperty
-import javafx.beans.value.{ChangeListener, ObservableBooleanValue, ObservableDoubleValue, ObservableFloatValue, ObservableIntegerValue, ObservableLongValue, ObservableValue}
+import javafx.beans.value._
 import javafx.collections.{ListChangeListener, ObservableList}
 import javafx.event.{EventHandler, EventType, Event => FXEvent}
-import javafx.scene.Node
 import javafx.scene.control.{Cell, ListCell, ListView}
+import javafx.scene.{Node, Parent}
 import javafx.util.Callback
 import net.kurobako.jfx.FXApp.FXContextShift
 
+import scala.collection.Factory
+
 object Event {
 
+	def deferUntilLayout[A](parent: Parent)(f: => IO[A])(implicit fxcs: FXContextShift, cs: ContextShift[IO]): IO[A] = FXIO {
+		if (parent.isNeedsLayout && parent.getParent != null) {
+			deferUntilLayout(parent)(f)
+		} else IO.shift(cs) *> f
+	}.flatten
 
-	def indexed[A](prop: ObservableList[A],
-				   consInit: Boolean = true,
-				   maxEvent: Int = 1)
-				  (implicit fxcs: FXContextShift, cs: ContextShift[IO]): Stream[IO, Vector[A]] = {
-		import scala.jdk.CollectionConverters._
+	def indexedRaw[A, C](prop: ObservableList[A], consInit: Boolean = true)(f: ObservableList[A] => C)
+						(implicit cs: ContextShift[IO]): Stream[IO, C] = {
 		for {
-			q <- Stream.eval(Queue.bounded[IO, Vector[A]](maxEvent))
-			_ <- Stream.eval[IO, Unit] {if (consInit) q.enqueue1(prop.asScala.toVector) else IO.unit}
+			q <- Stream.eval(Queue.bounded[IO, C](1))
+			_ <- Stream.eval[IO, Unit] {if (consInit) q.enqueue1(f(prop)) else IO.unit}
 			_ <- Stream.bracket(IO {
-				val listener: ListChangeListener[A] = { _ => unsafeRunAsync(q.enqueue1(prop.asScala.toVector)) }
+				val listener: ListChangeListener[A] = { _ => unsafeRunAsync(q.enqueue1(f(prop))) }
 				prop.addListener(listener)
 				listener
 			}) { x => IO {prop.removeListener(x)} }
@@ -34,9 +38,16 @@ object Event {
 		} yield a
 	}
 
+	def indexed[A, C](prop: ObservableList[A], consInit: Boolean = true)(factory: Factory[A, C])
+					 (implicit cs: ContextShift[IO]): Stream[IO, C] =
+		indexedRaw[A, C](prop, consInit) { xs =>
+			import scala.jdk.CollectionConverters._
+			xs.asScala.to(factory)
+		}
+
 
 	@inline private def lift0[B, A](prop: ObservableValue[B], consInit: Boolean)
-								   (implicit fxcs: FXContextShift, cs: ContextShift[IO], ev: B => A): Stream[IO, Option[A]] = {
+								   (implicit cs: ContextShift[IO], ev: B => A): Stream[IO, Option[A]] = {
 		for {
 			q <- Stream.eval(Queue.bounded[IO, Option[A]](1))
 			_ <- Stream.eval[IO, Unit] {if (consInit) q.enqueue1(Option(ev(prop.getValue))) else IO.unit}
@@ -50,7 +61,7 @@ object Event {
 	}
 
 	@inline private def lift1[O <: ObservableValue[P], P, B, A](prop: O, getter: O => B, consInit: Boolean)
-															   (implicit fxcs: FXContextShift, cs: ContextShift[IO], ev: B => A): Stream[IO, Option[A]] = {
+															   (implicit cs: ContextShift[IO], ev: B => A): Stream[IO, Option[A]] = {
 		for {
 			q <- Stream.eval(Queue.bounded[IO, Option[A]](1))
 			_ <- Stream.eval[IO, Unit] {if (consInit) q.enqueue1(Option(ev(getter(prop)))) else IO.unit}
@@ -64,22 +75,22 @@ object Event {
 	}
 
 	def lift[A <: AnyRef](prop: ObservableValue[A], consInit: Boolean)
-						 (implicit fxcs: FXContextShift, cs: ContextShift[IO]): Stream[IO, Option[A]] = lift0[A, A](prop, consInit)
+						 (implicit cs: ContextShift[IO]): Stream[IO, Option[A]] = lift0[A, A](prop, consInit)
 
 	def lift(prop: ObservableBooleanValue, consInit: Boolean)
-			(implicit fxcs: FXContextShift, cs: ContextShift[IO]): Stream[IO, Option[Boolean]] = lift1[ObservableBooleanValue, java.lang.Boolean, java.lang.Boolean, Boolean](prop, _.get, consInit)
+			(implicit cs: ContextShift[IO]): Stream[IO, Option[Boolean]] = lift1[ObservableBooleanValue, java.lang.Boolean, java.lang.Boolean, Boolean](prop, _.get, consInit)
 
 	def lift(prop: ObservableDoubleValue, consInit: Boolean)
-			(implicit fxcs: FXContextShift, cs: ContextShift[IO]): Stream[IO, Option[Double]] = lift1[ObservableDoubleValue, Number, java.lang.Double, Double](prop, _.get, consInit)
+			(implicit cs: ContextShift[IO]): Stream[IO, Option[Double]] = lift1[ObservableDoubleValue, Number, java.lang.Double, Double](prop, _.get, consInit)
 
 	def lift(prop: ObservableFloatValue, consInit: Boolean)
-			(implicit fxcs: FXContextShift, cs: ContextShift[IO]): Stream[IO, Option[Float]] = lift1[ObservableFloatValue, Number, java.lang.Float, Float](prop, _.get, consInit)
+			(implicit cs: ContextShift[IO]): Stream[IO, Option[Float]] = lift1[ObservableFloatValue, Number, java.lang.Float, Float](prop, _.get, consInit)
 
 	def lift(prop: ObservableIntegerValue, consInit: Boolean)
-			(implicit fxcs: FXContextShift, cs: ContextShift[IO]): Stream[IO, Option[Int]] = lift1[ObservableIntegerValue, Number, java.lang.Integer, Int](prop, _.get, consInit)
+			(implicit cs: ContextShift[IO]): Stream[IO, Option[Int]] = lift1[ObservableIntegerValue, Number, java.lang.Integer, Int](prop, _.get, consInit)
 
 	def lift(prop: ObservableLongValue, consInit: Boolean)
-			(implicit fxcs: FXContextShift, cs: ContextShift[IO]): Stream[IO, Option[Long]] = lift1[ObservableLongValue, Number, java.lang.Long, Long](prop, _.get, consInit)
+			(implicit cs: ContextShift[IO]): Stream[IO, Option[Long]] = lift1[ObservableLongValue, Number, java.lang.Long, Long](prop, _.get, consInit)
 
 
 	def handleEvent[A <: FXEvent](prop: ObjectProperty[_ >: EventHandler[A]])(f: A => Unit = (e: A) => e.consume()): Stream[IO, Unit] =
@@ -91,7 +102,7 @@ object Event {
 
 
 	def handleEventF[A <: FXEvent, B](prop: ObjectProperty[_ >: EventHandler[A]])(f: A => Option[B])
-									 (implicit fxcs: FXContextShift, cs: ContextShift[IO]): Stream[IO, B] = {
+									 (implicit cs: ContextShift[IO]): Stream[IO, B] = {
 		for {
 			q <- Stream.eval(Queue.bounded[IO, B](maxSize = 1))
 			_ <- Stream.bracket(IO {
@@ -105,7 +116,7 @@ object Event {
 
 	def handleEventF[A <: FXEvent, B](prop: Node)
 									 (eventType: EventType[A], filter: Boolean = false)(f: A => Option[B])
-									 (implicit fxcs: FXContextShift, cs: ContextShift[IO]): Stream[IO, B] = {
+									 (implicit cs: ContextShift[IO]): Stream[IO, B] = {
 		for {
 			q <- Stream.eval(Queue.bounded[IO, B](maxSize = 1))
 			_ <- Stream.bracket(IO {
