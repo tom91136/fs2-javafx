@@ -19,6 +19,6 @@ matrix:
 
 sudo: false
 
-#TODO test me
+#TODO move on to tests if possible
 script:
- - ./sbt clean;compile
+ - ./sbt "clean;compile"
