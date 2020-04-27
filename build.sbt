@@ -3,7 +3,7 @@ import ReleaseTransformations._
 lazy val `fs2-javafx` = project.in(file(".")).settings(
 	organization := "net.kurobako",
 	name := "fs2-javafx",
-	scalaVersion := "2.13.1",
+	scalaVersion := "2.13.2",
 	scalacOptions ++= Seq(
 		"-P:bm4:no-map-id:y",
 	),
@@ -19,7 +19,7 @@ lazy val `fs2-javafx` = project.in(file(".")).settings(
 
 	libraryDependencies ++= Seq(
 		"co.fs2" %% "fs2-core" % "2.3.0",
-		"org.scalatest" %% "scalatest" % "3.0.8" % Test
+		"org.scalatest" %% "scalatest" % "3.1.1" % Test
 	),
 
 

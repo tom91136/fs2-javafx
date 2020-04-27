@@ -12,15 +12,15 @@ import javafx.scene.layout._
 import javafx.scene.paint.{Color, CycleMethod, LinearGradient, Stop}
 import javafx.scene.shape.Rectangle
 import javafx.stage.Stage
-import net.kurobako.jfx.Event._
-import org.scalatest.{FlatSpec, Matchers}
+import net.kurobako.jfx.syntax._
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 import scala.collection.immutable.ArraySeq
 import scala.concurrent.ExecutionContext
-import scala.concurrent.duration._
 import scala.language.postfixOps
 
-class FXIOSpec extends FlatSpec with Matchers {
+class FXIOSpec extends AnyFlatSpec with Matchers {
 
 	behavior of "FXIOApp"
 	object IOContext {
@@ -35,16 +35,33 @@ class FXIOSpec extends FlatSpec with Matchers {
 		override def runFX(args: List[String], ctx: FXApp.FXContext, stage: Stage): Stream[IO, Unit] = {
 
 
-			indexed(FXCollections.observableArrayList(1, 2))(ArraySeq)
-			indexed(FXCollections.observableArrayList(1, 2))(List)
-			indexedRaw(FXCollections.observableArrayList(1, 2))(_.get(0))
+			liftList(FXCollections.observableArrayList(1, 2), consInit = true)(ArraySeq)
+			liftList(FXCollections.observableArrayList(1, 2), consInit = true)(List)
+			liftSet(FXCollections.observableSet(1, 2), consInit = true)(Set)
+			liftListRaw(FXCollections.observableArrayList(1, 2), consInit = true)(_.get(0))
 
-			lift(new SimpleStringProperty(), consInit = true): Stream[IO, Option[String]]
-			lift(new SimpleBooleanProperty(), consInit = true): Stream[IO, Option[Boolean]]
-			lift(new SimpleDoubleProperty(), consInit = true): Stream[IO, Option[Double]]
-			lift(new SimpleFloatProperty(), consInit = true): Stream[IO, Option[Float]]
-			lift(new SimpleLongProperty(), consInit = true): Stream[IO, Option[Long]]
-			lift(new SimpleIntegerProperty(), consInit = true): Stream[IO, Option[Int]]
+			FXCollections.observableArrayList(1, 2).observe(consInit = true)(ArraySeq)
+			FXCollections.observableArrayList(1, 2).observe(consInit = true)(List)
+			FXCollections.observableArrayList(1, 2).observeRaw(consInit = true)(_.get(0))
+
+			FXCollections.observableSet(1, 2).observe(consInit = true)(ArraySeq)
+			FXCollections.observableSet(1, 2).observe(consInit = true)(List)
+			FXCollections.observableSet(1, 2).observeRaw(consInit = true)(_.iterator())
+
+
+			lift(new SimpleStringProperty, consInit = true): Stream[IO, Option[String]]
+			lift(new SimpleBooleanProperty, consInit = true): Stream[IO, Option[Boolean]]
+			lift(new SimpleDoubleProperty, consInit = true): Stream[IO, Option[Double]]
+			lift(new SimpleFloatProperty, consInit = true): Stream[IO, Option[Float]]
+			lift(new SimpleLongProperty, consInit = true): Stream[IO, Option[Long]]
+			lift(new SimpleIntegerProperty, consInit = true): Stream[IO, Option[Int]]
+
+			new SimpleStringProperty().observe(consInit = true): Stream[IO, Option[String]]
+			new SimpleBooleanProperty().observe(consInit = true): Stream[IO, Option[Boolean]]
+			new SimpleDoubleProperty().observe(consInit = true): Stream[IO, Option[Double]]
+			new SimpleFloatProperty().observe(consInit = true): Stream[IO, Option[Float]]
+			new SimpleLongProperty().observe(consInit = true): Stream[IO, Option[Long]]
+			new SimpleIntegerProperty().observe(consInit = true): Stream[IO, Option[Int]]
 			Stream.eval(IO.unit)
 		}
 	}
@@ -72,17 +89,17 @@ class FXIOSpec extends FlatSpec with Matchers {
 					})))
 				stage.show()
 			}) ++ Stream.never[IO]
-//		++
-			//			Stream.eval_ {
-			//				ctx.hostServices.flatMap { h => IO {
-			//					println(h.showDocument("a"))}
-			//				}
-			//			}
-			//		++
-//			Stream.sleep_(300 milliseconds) ++
-//			Stream.eval(ctx.exit)
+		//		++
+		//			Stream.eval_ {
+		//				ctx.hostServices.flatMap { h => IO {
+		//					println(h.showDocument("a"))}
+		//				}
+		//			}
+		//		++
+		//			Stream.sleep_(300 milliseconds) ++
+		//			Stream.eval(ctx.exit)
 	}
-		it should "start the app" in IOContext(MyApp2.run(Nil))
+	//		it should "start the app" in IOContext(MyApp2.run(Nil))
 
 	object MyApp3 extends GlobalBlockerFXApp {
 
@@ -112,15 +129,21 @@ class FXIOSpec extends FlatSpec with Matchers {
 						val b = new MenuItem(s"Action b ($x)")
 						cell.setContextMenu(new ContextMenu(a, b))
 						joinAndDrain(
-							handleEvent(new VBox().onMouseClickedProperty())().evalMap(e => IO(println(s"$x -> a $e"))),
-							handleEvent(a.onActionProperty)().evalMap(e => IO(println(s"$x -> a $e"))),
-							handleEvent(b.onActionProperty)().evalMap(e => IO(println(s"$x -> b $e"))))
+							handleEvent(cell.onMouseClickedProperty())(x => Some(x)).evalMap(e => IO(println(s"$x -> a $e"))),
+							handleEvent(a.onActionProperty)(_ => Some(())).evalMap(e => IO(println(s"$x -> a $e"))),
+							handleEvent(b.onActionProperty)(_ => Some(())).evalMap(e => IO(println(s"$x -> b $e"))),
+
+							cell.onMouseClickedProperty().event(x => Some(x)).evalMap(e => IO(println(s"$x -> a $e"))),
+							a.onActionProperty.event(_ => Some(())).evalMap(e => IO(println(s"$x -> a $e"))),
+							b.onActionProperty.event(_ => Some(())).evalMap(e => IO(println(s"$x -> b $e"))),
+
+						)
 					})
 				case (None, cell)    => Stream.eval_(FXIO {cell.setContextMenu(null)})
 			})))
 
 	}
 
-//	it should "flow" in IOContext(MyApp3.run(Nil))
+	it should "flow" in IOContext(MyApp3.run(Nil))
 
 }

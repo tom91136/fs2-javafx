@@ -8,6 +8,7 @@ import javafx.beans.property.ObjectProperty
 import javafx.beans.value.{ChangeListener, ObservableValue}
 import javafx.event.{Event, EventHandler}
 import net.kurobako.jfx.FXApp.FXContextShift
+import net.kurobako.jfx.syntax._
 
 class EventSink[A] private(private val as: SignallingRef[IO, A],
 						   private val refs: SignallingRef[IO, List[IO[Unit]]])

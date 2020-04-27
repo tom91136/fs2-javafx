@@ -48,7 +48,7 @@ trait FXApp extends IOApp {
 			 Stream.eval(fxBlocker.blockOn(IO(Application.launch(classOf[FXAppHelper], args: _*))))
 		_ <- Stream.eval(IO(c(halt, fxContextShift))
 			.flatMap { case (ctx, stage) => runFX(args, ctx, stage).interruptWhen(halt).compile.drain })
-//			.onFinalize(IO(Platform.exit()))
+		//			.onFinalize(IO(Platform.exit()))
 	} yield ()).compile.drain.as(ExitCode.Success)
 }
 
@@ -77,14 +77,8 @@ object FXApp {
 	private var stopFn: Either[Throwable, Unit] => Unit                             = _
 
 	private class FXAppHelper extends Application {
-
-		override def start(primaryStage: Stage): Unit = {
-			FXApp.ctx(Right(new FXContext(this, _)(_) -> primaryStage))
-		}
-		override def stop(): Unit = {
-			println("Go Stop")
-			stopFn(Right(()))
-		}
+		override def start(primaryStage: Stage): Unit = FXApp.ctx(Right(new FXContext(this, _)(_) -> primaryStage))
+		override def stop(): Unit = stopFn(Right(()))
 	}
 
 }
