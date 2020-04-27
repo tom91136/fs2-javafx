@@ -70,6 +70,7 @@ object syntax {
 
 	implicit class EventHandlerInstances[A <: FXEvent](private val x: ObjectProperty[_ >: EventHandler[A]]) extends AnyVal {
 		def event[B](f: A => Option[B])(implicit cs: ContextShift[IO]): Stream[IO, B] = handleEvent(x)(f)
+		def event(implicit cs: ContextShift[IO]): Stream[IO, Unit] = handleEvent(x)(_ => Some(()))
 	}
 
 	implicit class ObservableListInstances[A](private val xs: ObservableList[A]) extends AnyVal {
