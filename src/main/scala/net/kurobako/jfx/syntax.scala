@@ -34,7 +34,7 @@ object syntax {
 	@inline def joinAndDrain(xs: Chain[Stream[IO, Any]])(implicit ev: Concurrent[IO]): Stream[IO, Nothing] =
 		joinAndDrain(xs.toList: _*)
 
-	implicit class ObservableInstances[A <: AnyRef](private val x: ObservableValue[A]) extends AnyVal {
+	implicit class ObservableInstances[A <: Any](private val x: ObservableValue[A]) extends AnyVal {
 		def observe(consInit: Boolean)(implicit cs: ContextShift[IO]): Stream[IO, Option[A]] = lift(x, consInit)
 		def map[B](f: A => B): ObjectBinding[B] = Bindings.createObjectBinding(() => f(x.getValue), x)
 	}
@@ -65,7 +65,7 @@ object syntax {
 
 	implicit class NodeInstances(private val x: Node) extends AnyVal {
 		def event[A <: FXEvent, B](eventType: EventType[A], filter: Boolean = false)(f: A => Option[B])
-								  (implicit cs: ContextShift[IO]): Stream[IO, B] = handleEvent(x)(eventType, filter)(f)
+		                          (implicit cs: ContextShift[IO]): Stream[IO, B] = handleEvent(x)(eventType, filter)(f)
 	}
 
 	implicit class EventHandlerInstances[A <: FXEvent](private val x: ObjectProperty[_ >: EventHandler[A]]) extends AnyVal {
