@@ -193,3 +193,5 @@ typings/
 !/sbt-dist/**/*
 
 .bloop
+
+.bsp/

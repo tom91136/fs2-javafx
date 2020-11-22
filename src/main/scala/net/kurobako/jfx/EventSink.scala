@@ -1,18 +1,16 @@
 package net.kurobako.jfx
 
-import cats.effect.{ContextShift, IO}
+import cats.effect.{IO}
 import cats.implicits._
 import fs2.Stream
 import fs2.concurrent.SignallingRef
 import javafx.beans.property.ObjectProperty
 import javafx.beans.value.{ChangeListener, ObservableValue}
 import javafx.event.{Event, EventHandler}
-import net.kurobako.jfx.FXApp.FXContextShift
 import net.kurobako.jfx.syntax._
 
 class EventSink[A] private(private val as: SignallingRef[IO, A],
-						   private val refs: SignallingRef[IO, List[IO[Unit]]])
-						  (implicit val fxcs: FXContextShift) {
+                           private val refs: SignallingRef[IO, List[IO[Unit]]]) {
 
 	val discrete: Stream[IO, A] = as.discrete
 
@@ -35,7 +33,7 @@ class EventSink[A] private(private val as: SignallingRef[IO, A],
 }
 
 object EventSink {
-	def apply[A](a: A)(implicit fxcs: FXContextShift, cs: ContextShift[IO]): IO[EventSink[A]] = for {
+	def apply[A](a: A): IO[EventSink[A]] = for {
 		as <- SignallingRef[IO, A](a)
 		refs <- SignallingRef[IO, List[IO[Unit]]](Nil)
 	} yield new EventSink(as, refs)

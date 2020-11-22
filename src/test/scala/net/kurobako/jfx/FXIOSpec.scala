@@ -1,8 +1,7 @@
 
 package net.kurobako.jfx
 
-import cats.effect.{Blocker, IO}
-import cats.implicits._
+import cats.effect.IO
 import fs2.Stream
 import javafx.beans.property._
 import javafx.collections.FXCollections
@@ -17,18 +16,19 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 import scala.collection.immutable.ArraySeq
-import scala.concurrent.ExecutionContext
 import scala.language.postfixOps
 
 class FXIOSpec extends AnyFlatSpec with Matchers {
 
 	behavior of "FXIOApp"
 	object IOContext {
+
+		import cats.effect.unsafe.implicits.global
+
 		def apply[A](io: IO[A]): A = io.unsafeRunSync()
 	}
 
 	trait GlobalBlockerFXApp extends FXApp {
-		override protected def fxBlocker: Blocker = Blocker.liftExecutionContext(ExecutionContext.global)
 	}
 
 	object MyApp1 extends GlobalBlockerFXApp {
