@@ -31,7 +31,7 @@ trait FXApp extends IOApp {
 		     Stream.eval(IO.blocking(Application.launch(classOf[FXAppHelper], args: _*)))
 		_ <- Stream.eval(IO(c(halt))
 			.flatMap { case (ctx, stage) => runFX(args, ctx, stage).interruptWhen(halt).compile.drain })
-		//			.onFinalize(IO(Platform.exit()))
+					.onFinalize(IO(Platform.exit()))
 	} yield ()).compile.drain.as(ExitCode.Success)
 }
 

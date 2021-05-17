@@ -3,7 +3,7 @@ package net.kurobako
 import cats.effect.{Deferred, Ref}
 import cats.effect.{Concurrent, Deferred, IO}
 import cats.implicits._
-import fs2.concurrent.Queue
+import cats.effect.std.Queue
 import fs2.{Pipe, Stream}
 import javafx.beans.InvalidationListener
 import javafx.beans.property.ObjectProperty
@@ -25,11 +25,11 @@ package object jfx {
 	                                         (f: C1 => C2)
 	: Stream[IO, C2] = for {
 		c2s <- Stream.eval(Queue.bounded[IO, C2](1))
-		_ <- Stream.eval[IO, Unit] {if (consInit) c2s.enqueue1(f(c1)) else IO.unit}
+		_ <- Stream.eval[IO, Unit] {if (consInit) c2s.offer(f(c1)) else IO.unit}
 		_ <- Stream.bracket(IO {
-			bind(c1 => unsafeRunAsync(c2s.enqueue1(f(c1))))
+			bind(c1 => unsafeRunAsync(c2s.offer(f(c1))))
 		}) { s => IO {unbind(c1, s)} }
-		a <- c2s.dequeue
+		a <-  Stream.fromQueueUnterminated(c2s)
 	} yield a
 
 
@@ -102,13 +102,13 @@ package object jfx {
 	def handleEvent[A <: FXEvent, B](prop: ObjectProperty[_ >: EventHandler[A]])(f: A => Option[B])
 	: Stream[IO, B] = {
 		for {
-			q <- Stream.eval(Queue.bounded[IO, B](maxSize = 1))
+			q <- Stream.eval(Queue.bounded[IO, B](capacity = 1))
 			_ <- Stream.bracket(IO {
 				prop.set(new EventHandler[A] {
-					override def handle(event: A): Unit = f(event).foreach(x => unsafeRunAsync(q.enqueue1(x)))
+					override def handle(event: A): Unit = f(event).foreach(x => unsafeRunAsync(q.offer(x)))
 				})
 			}) { _ => IO {prop.set(null)} }
-			a <- q.dequeue
+			a <- Stream.fromQueueUnterminated(q)
 		} yield a
 	}
 
@@ -116,9 +116,9 @@ package object jfx {
 	                                (eventType: EventType[A], filter: Boolean = false)
 	                                (f: A => Option[B]): Stream[IO, B] = {
 		for {
-			q <- Stream.eval(Queue.bounded[IO, B](maxSize = 1))
+			q <- Stream.eval(Queue.bounded[IO, B](capacity = 1))
 			_ <- Stream.bracket(IO {
-				val handler: EventHandler[A] = { e => f(e).foreach(x => unsafeRunAsync(q.enqueue1(x))) }
+				val handler: EventHandler[A] = { e => f(e).foreach(x => unsafeRunAsync(q.offer(x))) }
 				if (filter) prop.addEventFilter[A](eventType, handler)
 				else prop.addEventHandler[A](eventType, handler)
 				handler
@@ -128,7 +128,7 @@ package object jfx {
 					else prop.removeEventHandler(eventType, x)
 				}
 			}
-			a <- q.dequeue
+			a <- Stream.fromQueueUnterminated(q)
 		} yield a
 	}
 
@@ -146,13 +146,13 @@ package object jfx {
 					override def updateItem(item: A, empty: Boolean): Unit = {
 						super.updateItem(item, empty)
 						val a = if (empty || item == null) None else Some(item)
-						unsafeRunAsync(unsafeUpdate(a, node) *> q.enqueue1(a -> node))
+						unsafeRunAsync(unsafeUpdate(a, node) *> q.offer(a -> node))
 					}
 				}
 			}
 			prev
 		}) { prev => IO {prop.set(prev)} }
-		a <- q.dequeue
+		a <- Stream.fromQueueUnterminated(q)
 	} yield a
 
 
@@ -165,11 +165,11 @@ package object jfx {
 			_ <- Stream.bracket(FXIO {
 				val prev = prop.get
 				prop.set { a =>
-					mkCell(a, { (a, c) => unsafeRunAsync(tickUnsafe(a, c) *> q.enqueue1(a -> c)) })
+					mkCell(a, { (a, c) => unsafeRunAsync(tickUnsafe(a, c) *> q.offer(a -> c)) })
 				}
 				prev
 			}) { prev => IO {prop.set(prev)} }
-			a <- q.dequeue
+			a <- Stream.fromQueueUnterminated(q)
 		} yield a
 	}
 

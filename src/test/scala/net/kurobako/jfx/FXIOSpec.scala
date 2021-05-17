@@ -70,7 +70,7 @@ class FXIOSpec extends AnyFlatSpec with Matchers {
 
 	object MyApp2 extends GlobalBlockerFXApp {
 		override def runFX(args: List[String], ctx: FXApp.FXContext, stage: Stage): Stream[IO, Unit] =
-			Stream.eval_(FXIO {
+			Stream.exec(FXIO {
 
 
 				stage.setScene(new Scene(new StackPane(
@@ -139,7 +139,7 @@ class FXIOSpec extends AnyFlatSpec with Matchers {
 
 						)
 					})
-				case (None, cell)    => Stream.eval_(FXIO {cell.setContextMenu(null)})
+				case (None, cell)    => Stream.exec(FXIO {cell.setContextMenu(null)})
 			})))
 
 	}
