@@ -1,12 +1,13 @@
 package net.kurobako.jfx
 
-import cats.effect.{  ExitCode, IO, IOApp}
+import cats.effect.{ExitCode, IO, IOApp}
 import cats.implicits._
 import fs2.Stream
 import fs2.concurrent.{Signal, SignallingRef}
 import javafx.application.{Application, ConditionalFeature, HostServices, Platform}
 import javafx.stage.Stage
 import net.kurobako.jfx.FXApp.{FXAppHelper, FXContext}
+import net.kurobako.jfx.syntax.FXIO
 
 import scala.concurrent.ExecutionContext
 
@@ -24,15 +25,23 @@ trait FXApp extends IOApp {
 	/**
 	 * Delegates to [[runFX]], do not use directly.
 	 */
-	override final def run(args: List[String]): IO[ExitCode] = (for {
-		halt <- Stream.eval(SignallingRef[IO, Boolean](false))
-		c <- Stream.eval(IO.async_[(SignallingRef[IO, Boolean]) => (FXContext, Stage)] { cb => FXApp.ctx = cb }) concurrently
-		     Stream.eval(IO.async_[Unit] { cb => FXApp.stopFn = cb } *> halt.set(true)) concurrently
-		     Stream.eval(IO.blocking(Application.launch(classOf[FXAppHelper], args: _*)))
-		_ <- Stream.eval(IO(c(halt))
-			.flatMap { case (ctx, stage) => runFX(args, ctx, stage).interruptWhen(halt).compile.drain })
+	override final def run(args: List[String]): IO[ExitCode] = {
+
+		for{
+			halt <- SignallingRef[IO, Boolean](false)
+			fx <- (for {
+				c <- Stream.eval(IO.async_[(SignallingRef[IO, Boolean]) => (FXContext, Stage)] { cb => FXApp.ctx = cb }) concurrently
+				     Stream.eval(IO.async_[Unit] { cb => FXApp.stopFn = cb } *> halt.set(true)) concurrently
+				     Stream.eval(IO.blocking(Application.launch(classOf[FXAppHelper], args: _*)))
+				_ <- Stream.eval(IO(c(halt))
+					.flatMap { case (ctx, stage) =>
+						FXIO { Platform.setImplicitExit(false) } *>
+						runFX(args, ctx, stage).interruptWhen(halt).compile.drain })
 					.onFinalize(IO(Platform.exit()))
-	} yield ()).compile.drain.as(ExitCode.Success)
+			} yield ()).compile.drain.start
+			_ <- fx.joinWith(IO.println("Cancelled, sending term to FX...") *> halt.set(true))
+		} yield ExitCode.Success
+	}
 }
 
 object FXApp {
@@ -56,7 +65,10 @@ object FXApp {
 
 	private class FXAppHelper extends Application {
 		override def start(primaryStage: Stage): Unit = FXApp.ctx(Right(new FXContext(this, _) -> primaryStage))
-		override def stop(): Unit = stopFn(Right(()))
+		override def stop(): Unit = {
+			println("FX requested termination...")
+			stopFn(Right(()))
+		}
 	}
 
 }

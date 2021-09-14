@@ -3,7 +3,7 @@ import ReleaseTransformations._
 lazy val `fs2-javafx` = project.in(file(".")).settings(
 	organization := "net.kurobako",
 	name := "fs2-javafx",
-	scalaVersion := "2.13.5",
+	scalaVersion := "2.13.6",
 	scalacOptions ++= Seq(
 		"-P:bm4:no-map-id:y",
 	),
@@ -18,8 +18,8 @@ lazy val `fs2-javafx` = project.in(file(".")).settings(
 	addCompilerPlugin("org.typelevel" %% "kind-projector" % "0.10.3"),
 
 	libraryDependencies ++= Seq(
-		"co.fs2" %% "fs2-core" % "3.0.3",
-		"org.scalatest" %% "scalatest" % "3.2.2" % Test
+		"co.fs2" %% "fs2-core" % "3.0.6",
+		"org.scalatest" %% "scalatest" % "3.2.9" % Test
 	),
 
 
